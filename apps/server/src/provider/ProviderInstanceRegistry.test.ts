@@ -48,6 +48,7 @@ import * as ResetCreditCoordinator from "./resetCreditCoordinator.ts";
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
 import { makeProviderInstanceRegistry } from "./ProviderInstanceRegistry.ts";
 import { ProviderDriverError } from "./Errors.ts";
+import { restrictedDriverReason } from "./ProviderInstanceRegistryHydration.ts";
 import * as ProviderInstallationGate from "./ProviderInstallationGate.ts";
 import * as ProviderOrchestrationAdapterInfrastructure from "./ProviderOrchestrationAdapterInfrastructure.ts";
 import * as PortScanner from "../preview/PortScanner.ts";
@@ -421,6 +422,34 @@ describe("ProviderInstanceRegistry — multi-instance codex slice", () => {
       expect(unavailable?.instanceId).toBe(instanceId);
       expect(unavailable?.availability).toBe("unavailable");
       expect(unavailable?.unavailableReason).toBe(reason);
+    }).pipe(Effect.provide(layerTest)),
+  );
+
+  it.effect("never creates a restricted driver on startup or reconciliation", () =>
+    Effect.gen(function* () {
+      const instanceId = ProviderInstanceId.make("codex_restricted");
+      const create = vi.fn(CodexDriver.create);
+      const { registry, mutator } = yield* makeProviderInstanceRegistry({
+        drivers: [{ ...CodexDriver, create }],
+        configMap: { [instanceId]: { driver: ProviderDriverKind.make("codex") } },
+        blockedReason: restrictedDriverReason,
+      });
+      expect(yield* registry.getInstance(instanceId)).toBeUndefined();
+      expect(create).not.toHaveBeenCalled();
+
+      yield* mutator.reconcile({
+        [instanceId]: {
+          driver: ProviderDriverKind.make("codex"),
+          enabled: true,
+          config: { binaryPath: "another-codex" },
+        },
+      });
+      yield* mutator.rebuild([instanceId]);
+      expect(yield* registry.getInstance(instanceId)).toBeUndefined();
+      expect((yield* registry.listUnavailable)[0]?.unavailableReason).toBe(
+        "Only the Pi driver is available in this build.",
+      );
+      expect(create).not.toHaveBeenCalled();
     }).pipe(Effect.provide(layerTest)),
   );
 

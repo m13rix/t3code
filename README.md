@@ -23,6 +23,8 @@
   </a>
 </p>
 
+> **Telos Pi desktop fork:** This branch is based on T3 Code nightly `v0.1.12-nightly.20261124.5191`. It uses the [local Telos Pi checkout](./docs/user/telos-pi-desktop.md) as its only coding-agent harness, over Pi’s native RPC. The upstream downloads below do not include this integration.
+
 T3 Code runs the coding agents on your machine and gives them one fast interface. Start a thread at your desk, then approve the next step from your phone.
 
 It works with Claude Code, Codex, Cursor, OpenCode, Grok Build, Antigravity, Kiro, Pi, Muse Code, fx, and any [ACP](./docs/user/providers-acp.md) agent. If an agent is set up on your computer, T3 Code can control it.

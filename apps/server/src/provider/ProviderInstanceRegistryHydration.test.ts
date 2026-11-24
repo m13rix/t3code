@@ -27,6 +27,7 @@ import {
   deriveProviderInstanceConfigMap,
   layerSettingsWatcher,
   providerHostLayer,
+  restrictedDriverReason,
   seedDevReplayInstance,
 } from "./ProviderInstanceRegistryHydration.ts";
 import * as ProviderHostLive from "./ProviderHostLive.ts";
@@ -38,6 +39,46 @@ const instanceId = ProviderInstanceId.make("codex_work");
 function settingsWith(overrides: Partial<ServerSettings>): ServerSettings {
   return { ...DEFAULT_SERVER_SETTINGS, ...overrides };
 }
+
+describe("driver restriction", () => {
+  it("allows Pi and blocks every other driver, including ACP and unknown drivers", () => {
+    expect(restrictedDriverReason(ProviderDriverKind.make("pi"))).toBeUndefined();
+    for (const driver of ["codex", "claudeAgent", "acpRegistry", "unknown"]) {
+      expect(restrictedDriverReason(ProviderDriverKind.make(driver))).toBe(
+        "Only the Pi driver is available in this build.",
+      );
+    }
+  });
+
+  it("still applies managed policy to Pi", () => {
+    const reason = restrictedDriverReason(ProviderDriverKind.make("pi"), {
+      organization: "Example Corp",
+      lockedSettings: [],
+      limits: { providers: { allowedDrivers: [ProviderDriverKind.make("codex")] } },
+    });
+    expect(reason).toContain("Example Corp");
+    expect(reason).toContain("Pi");
+  });
+
+  it("preserves an explicitly disabled Pi instance", () => {
+    const pi = ProviderInstanceId.make("pi");
+    const saved = { driver: ProviderDriverKind.make("pi"), enabled: false };
+    const merged = deriveProviderInstanceConfigMap(
+      settingsWith({ providerInstances: { [pi]: saved } }),
+    );
+    expect(merged[pi]).toBe(saved);
+  });
+
+  it("only creates a Pi default while retaining saved non-Pi instances", () => {
+    const saved = { driver: ProviderDriverKind.make("codex") };
+    const merged = deriveProviderInstanceConfigMap(
+      settingsWith({ providerInstances: { [instanceId]: saved } }),
+    );
+    expect(merged[ProviderInstanceId.make("pi")]).toEqual({ driver: "pi", enabled: true });
+    expect(merged[instanceId]).toBe(saved);
+    expect(merged[ProviderInstanceId.make("codex")]).toBeUndefined();
+  });
+});
 
 describe("deriveProviderInstanceConfigMap", () => {
   it("turns a machine-disabled instance on when a project enables it", () => {

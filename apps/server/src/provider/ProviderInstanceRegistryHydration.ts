@@ -58,10 +58,10 @@ export const deriveProviderInstanceConfigMap = (
   const merged: Record<string, ProviderInstanceConfig> = { ...settings.providerInstances };
 
   for (const driver of BUILT_IN_DRIVERS) {
-    if (driver.metadata.hasDefaultInstance === false) continue;
+    if (driver.driverKind !== "pi" || driver.metadata.hasDefaultInstance === false) continue;
     const instanceId = defaultInstanceIdForDriver(driver.driverKind);
     if (instanceId in merged) continue;
-    merged[instanceId] = { driver: driver.driverKind };
+    merged[instanceId] = { driver: driver.driverKind, enabled: true };
   }
 
   // Probe project-enabled instances even if disabled machine-wide; project threads can still route to them.
@@ -85,6 +85,14 @@ export const deriveProviderInstanceConfigMap = (
 
   return merged as ProviderInstanceConfigMap;
 };
+
+export const restrictedDriverReason = (
+  driver: ProviderDriverKind,
+  policy?: Parameters<typeof ManagedProviders.disallowedDriverReason>[0],
+): string | undefined =>
+  driver === "pi"
+    ? ManagedProviders.disallowedDriverReason(policy, driver)
+    : "Only the Pi driver is available in this build.";
 
 export const DEV_REPLAY_INSTANCE_ID = ProviderInstanceId.make("devReplay");
 
@@ -179,9 +187,6 @@ export const layer: Layer.Layer<
 > = Layer.unwrap(
   Effect.gen(function* () {
     const serverSettings = yield* Settings.ServerSettingsService;
-    yield* seedDevReplayInstance().pipe(
-      Effect.catchCause((cause) => Effect.logWarning("Dev replay agent unavailable", cause)),
-    );
     // Subscribe before the seed read so saves during registry construction are queued.
     const settingsChanges = yield* serverSettings.subscribeChanges;
     const initialSettings: ServerSettings | undefined = yield* serverSettings.getSettings.pipe(
@@ -202,8 +207,7 @@ export const layer: Layer.Layer<
     const layerMutable = ProviderInstanceRegistry.layer({
       drivers: BUILT_IN_DRIVERS,
       configMap: initialConfigMap,
-      blockedReason: (driver) =>
-        ManagedProviders.disallowedDriverReason(serverSettings.managedPolicy, driver),
+      blockedReason: (driver) => restrictedDriverReason(driver, serverSettings.managedPolicy),
     }).pipe(
       Layer.provide(ProviderOrchestrationAdapterInfrastructure.layer),
       Layer.provide(AcpRegistrySupport.layerFromHost),

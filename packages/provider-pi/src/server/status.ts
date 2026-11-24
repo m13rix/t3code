@@ -2,7 +2,6 @@ import { resolveProviderProbeTimeoutMs } from "@t3tools/provider-core/server/sna
 import {
   ProviderDriverKind,
   type CustomModelSetting,
-  type ServerProvider,
   type ServerProviderModel,
 } from "@t3tools/contracts";
 import type { PiSettings } from "../settings.ts";
@@ -22,7 +21,6 @@ import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
-import * as HttpClient from "effect/http/HttpClient";
 import * as ChildProcess from "effect/process/ChildProcess";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 
@@ -34,7 +32,6 @@ import {
   piRecordField as recordField,
   piRecordString as recordString,
 } from "./rpc.ts";
-import * as ProviderLatestVersions from "@t3tools/provider-core/server/ProviderLatestVersions";
 import {
   buildServerProvider,
   DEFAULT_TIMEOUT_MS,
@@ -45,10 +42,6 @@ import {
   spawnAndCollect,
   type ServerProviderDraft,
 } from "@t3tools/provider-core/server/snapshotProbe";
-import {
-  enrichProviderSnapshotWithVersionAdvisory,
-  type ProviderMaintenanceCapabilities,
-} from "@t3tools/provider-core/server/maintenanceResolver";
 import { EMPTY_PI_MODEL_CAPABILITIES, piModelCapabilities } from "./modelCapabilities.ts";
 import {
   parsePiDiscoveredCommands,
@@ -57,7 +50,7 @@ import {
 } from "./commands.ts";
 
 const PI_PRESENTATION = {
-  displayName: "Pi",
+  displayName: "Telos Pi",
   showInteractionModeToggle: false,
   supportedRuntimeModes: ["approval-required", "auto-accept-edits", "full-access"],
   reportsContextWindow: true,
@@ -392,7 +385,7 @@ const describeUnavailablePiModel = Effect.fn("PiProviderStatus.describeUnavailab
       (check) => check.reason === "credentials_not_configured",
     );
     return missingCredentials
-      ? `${label} has no credentials configured for ${model.provider}. Choose another model, or run \`pi\` in a terminal and use /login or configure its API key.`
+      ? `${label} has no credentials configured for ${model.provider}. Choose another model, or open Telos Pi in a terminal and use /login or configure its API key.`
       : unavailable;
   },
 );
@@ -479,7 +472,7 @@ export const checkPiProviderStatus = Effect.fn("checkPiProviderStatus")(function
         status: "error",
         auth: { status: "unknown" },
         message: isCommandMissingCause(error)
-          ? "Pi CLI (`pi`) is not installed or not on PATH. Install with `npm install -g --ignore-scripts @earendil-works/pi-coding-agent`."
+          ? `Telos Pi was not found at ${piSettings.binaryPath}. Set the path to your Telos Pi executable in provider settings.`
           : "Failed to execute Pi CLI health check.",
       },
     });
@@ -658,27 +651,3 @@ export const checkPiProviderStatus = Effect.fn("checkPiProviderStatus")(function
     ...(discovery.textGenerationUnavailable ? { supportsTextGeneration: false } : {}),
   };
 });
-
-export const enrichPiSnapshot = (input: {
-  readonly snapshot: ServerProvider;
-  readonly maintenanceCapabilities: ProviderMaintenanceCapabilities;
-  readonly enableProviderUpdateChecks?: boolean;
-  readonly publishSnapshot: (snapshot: ServerProvider) => Effect.Effect<void>;
-}): Effect.Effect<
-  void,
-  never,
-  HttpClient.HttpClient | ProviderLatestVersions.ProviderLatestVersions
-> => {
-  const { snapshot, publishSnapshot } = input;
-  return enrichProviderSnapshotWithVersionAdvisory(snapshot, input.maintenanceCapabilities, {
-    enableProviderUpdateChecks: input.enableProviderUpdateChecks,
-  }).pipe(
-    Effect.flatMap((enrichedSnapshot) => publishSnapshot(enrichedSnapshot)),
-    Effect.catchCause((cause) =>
-      Effect.logWarning("Pi version advisory enrichment failed", {
-        errorTag: causeErrorTag(cause),
-      }),
-    ),
-    Effect.asVoid,
-  );
-};

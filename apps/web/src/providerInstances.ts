@@ -82,7 +82,14 @@ export function isProviderInstancePickerReady(entry: ProviderInstanceEntry): boo
 }
 
 export function isProviderInstancePickerVisible(entry: ProviderInstanceEntry): boolean {
-  return entry.enabled;
+  return entry.enabled && entry.driverKind === "pi";
+}
+
+export function providerEntriesForThread(
+  entries: ReadonlyArray<ProviderInstanceEntry>,
+  isDraft: boolean,
+): ReadonlyArray<ProviderInstanceEntry> {
+  return isDraft ? entries.filter((entry) => entry.driverKind === "pi") : entries;
 }
 
 export function deriveProviderInstanceEntries(

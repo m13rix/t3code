@@ -1,14 +1,12 @@
 // User-wide ~/.pi/agent state makes continuation identity use default instance grouping.
 import { ProviderDriverKind, type ServerProvider } from "@t3tools/contracts";
-import { PiSettings } from "../settings.ts";
+import { DEFAULT_TELOS_PI_BINARY, PiSettings } from "../settings.ts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
-import * as HttpClient from "effect/http/HttpClient";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 
-import * as ProviderLatestVersions from "@t3tools/provider-core/server/ProviderLatestVersions";
 import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
 import { piUsageReader } from "./usage.ts";
 import { makePiTextGeneration } from "./textGeneration.ts";
@@ -18,7 +16,6 @@ import {
   buildInitialPiProviderSnapshot,
   checkPiProviderStatus,
   discoverPiCommandsForCwd,
-  enrichPiSnapshot,
 } from "./status.ts";
 import { makeManagedServerProvider } from "@t3tools/provider-core/server/managedProvider";
 import {
@@ -28,11 +25,7 @@ import {
 } from "@t3tools/provider-core/server/driver";
 import type { ServerProviderDraft } from "@t3tools/provider-core/server/snapshotProbe";
 import { mergeProviderInstanceEnvironment } from "@t3tools/provider-core/server/instanceEnvironment";
-import {
-  makeCachedProviderMaintenanceResolution,
-  makePackageManagedProviderMaintenanceResolver,
-  resolveProviderMaintenanceCapabilitiesEffect,
-} from "@t3tools/provider-core/server/maintenanceResolver";
+import { makeManualOnlyProviderMaintenanceCapabilities } from "@t3tools/provider-core/server/maintenanceResolver";
 import {
   haveProviderSnapshotSettingsChanged,
   makeProviderSnapshotSettingsSource,
@@ -42,20 +35,12 @@ import {
 const decodePiSettings = Schema.decodeSync(PiSettings);
 
 const DRIVER_KIND = ProviderDriverKind.make("pi");
-const UPDATE = makePackageManagedProviderMaintenanceResolver({
-  provider: DRIVER_KIND,
-  npmPackageName: "@earendil-works/pi-coding-agent",
-  mise: { tool: "pi" },
-  nativeUpdate: { args: ["update", "--self"] },
-});
 
 export type PiDriverEnv =
   | PiAdapterV2DriverEnv
   | ProviderHost.ProviderHost
   | ChildProcessSpawner.ChildProcessSpawner
   | FileSystem.FileSystem
-  | HttpClient.HttpClient
-  | ProviderLatestVersions.ProviderLatestVersions
   | Path.Path;
 
 const withInstanceIdentity =
@@ -77,7 +62,7 @@ const withInstanceIdentity =
 export const PiDriver: ProviderDriver<PiSettings, PiDriverEnv, Path.Path> = {
   driverKind: DRIVER_KIND,
   metadata: {
-    displayName: "Pi",
+    displayName: "Telos Pi",
     supportsMultipleInstances: true,
   },
   usage: piUsageReader,
@@ -94,8 +79,6 @@ export const PiDriver: ProviderDriver<PiSettings, PiDriverEnv, Path.Path> = {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
     const fileSystem = yield* FileSystem.FileSystem;
     const pathService = yield* Path.Path;
-    const httpClient = yield* HttpClient.HttpClient;
-    const latestVersions = yield* ProviderLatestVersions.ProviderLatestVersions;
     const host = yield* ProviderHost.ProviderHost;
     // Pi runs extensions' session_start in its cwd; the server's cwd is $HOME on packaged desktop.
     const probeCwd = pathService.join(host.paths.providerStatusCacheDir, "pi-status-probe");
@@ -110,17 +93,22 @@ export const PiDriver: ProviderDriver<PiSettings, PiDriverEnv, Path.Path> = {
       accentColor,
       continuationGroupKey: continuationIdentity.continuationKey,
     });
-    const effectiveConfig = { ...config, enabled } satisfies PiSettings;
-    const resolveMaintenance = yield* makeCachedProviderMaintenanceResolution(
-      resolveProviderMaintenanceCapabilitiesEffect(UPDATE, {
-        binaryPath: effectiveConfig.binaryPath,
-        env: processEnv,
-      }).pipe(
-        Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
-        Effect.provideService(FileSystem.FileSystem, fileSystem),
-        Effect.provideService(Path.Path, pathService),
-      ),
-    );
+    // Migrate the stock default without overriding an explicitly configured executable.
+    const configuredBinary = config.binaryPath;
+    const binaryPath =
+      configuredBinary === DEFAULT_TELOS_PI_BINARY || configuredBinary === "pi"
+        ? processEnv.TELOS_PI_BINARY?.trim() || DEFAULT_TELOS_PI_BINARY
+        : configuredBinary;
+    const effectiveConfig = { ...config, enabled, binaryPath } satisfies PiSettings;
+    // Update the Telos checkout itself, not the upstream Pi npm package.
+    const resolveMaintenance = () =>
+      Effect.succeed(
+        makeManualOnlyProviderMaintenanceCapabilities({
+          provider: DRIVER_KIND,
+          packageName: null,
+          installPath: binaryPath,
+        }),
+      );
 
     const orchestrationAdapter = yield* PiAdapterV2Driver.create({
       instanceId,
@@ -128,7 +116,7 @@ export const PiDriver: ProviderDriver<PiSettings, PiDriverEnv, Path.Path> = {
       accentColor,
       environment,
       enabled,
-      config,
+      config: effectiveConfig,
     }).pipe(
       Effect.mapError(
         (cause) =>
@@ -166,19 +154,6 @@ export const PiDriver: ProviderDriver<PiSettings, PiDriverEnv, Path.Path> = {
       initialSnapshot: (settings) =>
         buildInitialPiProviderSnapshot(settings.provider).pipe(Effect.map(stampIdentity)),
       checkProvider,
-      enrichSnapshot: ({ settings, snapshot: currentSnapshot, publishSnapshot }) =>
-        resolveMaintenance().pipe(
-          Effect.flatMap((maintenanceCapabilities) =>
-            enrichPiSnapshot({
-              snapshot: currentSnapshot,
-              maintenanceCapabilities,
-              enableProviderUpdateChecks: settings.enableProviderUpdateChecks,
-              publishSnapshot,
-            }),
-          ),
-          Effect.provideService(HttpClient.HttpClient, httpClient),
-          Effect.provideService(ProviderLatestVersions.ProviderLatestVersions, latestVersions),
-        ),
     }).pipe(
       Effect.mapError(
         (cause) =>

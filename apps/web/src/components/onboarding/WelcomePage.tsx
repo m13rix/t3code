@@ -429,8 +429,12 @@ function useWelcomeAgents(environmentId: EnvironmentId) {
   return {
     providers,
     serverConfig,
-    ...groupWelcomeAgents(providers, serverConfig?.settings, agentName, (provider) =>
-      isManagedDriverAllowed(managedPolicy, provider.driver),
+    ...groupWelcomeAgents(
+      providers,
+      serverConfig?.settings,
+      agentName,
+      (provider) =>
+        provider.driver === "pi" && isManagedDriverAllowed(managedPolicy, provider.driver),
     ),
   };
 }
@@ -439,8 +443,6 @@ const isImportSource = Schema.is(AgentSessionSource);
 
 // The setup card opens below a long list, so bring it into view once.
 const revealOnMount = (node: HTMLElement | null) => node?.scrollIntoView({ block: "nearest" });
-
-const ACP_REGISTRY_DRIVER_KIND = ProviderDriverKind.make("acpRegistry");
 
 function AgentsSection({
   environmentId,
@@ -477,7 +479,7 @@ function AgentsSection({
   // status can be wrong, so this waits for the checks, and a later check never closes it.
   if (moreOpen === null && !checking && found.length === 0) setMoreOpen(true);
   const showMore = moreOpen ?? false;
-  const acpAllowed = isManagedDriverAllowed(serverConfig?.managedPolicy, ACP_REGISTRY_DRIVER_KIND);
+  const acpAllowed = false;
   const stateOf = (provider: ServerProvider) => welcomeAgentState(provider, serverConfig?.settings);
   const needsInstallOrSignIn = (provider: ServerProvider) => {
     const state = stateOf(provider);

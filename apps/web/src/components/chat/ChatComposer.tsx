@@ -976,6 +976,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     projectModelSelection: activeProjectDefaultModelSelection,
     promptInjectionState: getComposerPromptInjectionState(prompt),
     threadStarted: threadHasStarted(activeThread),
+    isDraftThread: routeKind === "draft",
     candidateInstanceIds: [
       activeThread?.runtime?.providerInstanceId,
       activeThreadModelSelection?.instanceId,

@@ -35,7 +35,7 @@ const mcpSession = {
 describe("pi T3 MCP injection", () => {
   it("always adds the permission bridge and configures MCP when available", () => {
     const resolvedArgs = resolvePiLaunchArgs(
-      "--extension=/home/user/.pi/agent/extensions/demo.ts --session-dir=/tmp/pi-sessions --provider=anthropic --model=claude-sonnet --tools='' --name=-review --extension-flag=kept",
+      "--agent=reviewer --extension=/home/user/.pi/agent/extensions/demo.ts --session-dir=/tmp/pi-sessions --provider=anthropic --model=claude-sonnet --tools='' --name=-review --extension-flag=kept",
     );
     assert.isTrue(resolvedArgs.ok);
     if (!resolvedArgs.ok) return;
@@ -49,6 +49,8 @@ describe("pi T3 MCP injection", () => {
     assert.deepEqual(launch.args, [
       "--mode",
       "rpc",
+      "--agent",
+      "reviewer",
       "--extension",
       "/home/user/.pi/agent/extensions/demo.ts",
       "--session-dir",

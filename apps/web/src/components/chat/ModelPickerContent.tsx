@@ -681,7 +681,11 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
     return disabled;
   })();
   const sidebarInstanceEntries = (() => {
-    const enabledEntries = instanceEntries.filter(isProviderInstancePickerVisible);
+    const enabledEntries = instanceEntries.filter(
+      (entry) =>
+        isProviderInstancePickerVisible(entry) ||
+        (isLocked && entry.enabled && matchesLockedProvider(entry)),
+    );
     if (!isLocked) {
       return enabledEntries;
     }

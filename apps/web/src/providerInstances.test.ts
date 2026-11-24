@@ -13,6 +13,8 @@ import {
   deriveProviderInstanceEntries,
   getDefaultProviderInstanceModel,
   isProviderInstancePickerReady,
+  isProviderInstancePickerVisible,
+  providerEntriesForThread,
   resolveDefaultProviderModelSelection,
   resolveSelectableProviderInstance,
   shouldShowInstanceBadge,
@@ -56,6 +58,24 @@ const model = (slug: string, isCustom = false, isDefault = false) => ({
   isCustom,
   ...(isDefault ? { isDefault: true } : {}),
   capabilities: {},
+});
+
+describe("isProviderInstancePickerVisible", () => {
+  it("offers only enabled Pi instances", () => {
+    const entries = deriveProviderInstanceEntries([
+      provider({ provider: ProviderDriverKind.make("codex"), instanceId: "codex" }),
+      provider({ provider: ProviderDriverKind.make("pi"), instanceId: "pi" }),
+      provider({ provider: ProviderDriverKind.make("pi"), instanceId: "pi_2", enabled: false }),
+    ]);
+    expect(
+      entries.filter(isProviderInstancePickerVisible).map((entry) => entry.instanceId),
+    ).toEqual(["pi"]);
+    expect(providerEntriesForThread(entries, true).map((entry) => entry.instanceId)).toEqual([
+      "pi",
+      "pi_2",
+    ]);
+    expect(providerEntriesForThread(entries, false)).toBe(entries);
+  });
 });
 
 describe("isProviderInstancePickerReady", () => {

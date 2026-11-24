@@ -226,6 +226,7 @@ import {
 import {
   NO_PROVIDER_MODEL_SELECTION,
   providerInstanceEntriesFor,
+  providerEntriesForThread,
   resolveProjectDefaultProviderModelSelection,
   shouldShowInstanceBadge,
 } from "../providerInstances";
@@ -1427,10 +1428,14 @@ export default function ChatView(props: ChatViewProps) {
     automaticEnvironment,
     autoUpdateEnvironments,
   });
-  const providerInstanceEntries = providerInstanceEntriesFor(
+  const allProviderInstanceEntries = providerInstanceEntriesFor(
     providerStatuses,
     settings,
     activeProject?.id ?? null,
+  );
+  const providerInstanceEntries = providerEntriesForThread(
+    allProviderInstanceEntries,
+    !!draftThread,
   );
   const activeThreadModelInstanceId = activeThread?.modelSelection.instanceId;
   const { selectedProviderEntry, requestedDriverKind } = resolveComposerProviderSelection({

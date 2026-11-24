@@ -8,17 +8,19 @@ import {
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
+export const DEFAULT_TELOS_PI_BINARY = "/mnt/AI1/telos_projects/Pi/pi/pi-test.sh";
+
 export const PiSettings = makeProviderSettingsSchema(
   {
     enabled: Schema.Boolean.pipe(
-      Schema.withDecodingDefault(Effect.succeed(false)),
+      Schema.withDecodingDefault(Effect.succeed(true)),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
-    binaryPath: makeBinaryPathSetting("pi").pipe(
+    binaryPath: makeBinaryPathSetting(DEFAULT_TELOS_PI_BINARY).pipe(
       Schema.annotateKey({
         title: "Binary path",
-        description: "Path to the Pi coding agent binary.",
-        providerSettingsForm: { placeholder: "pi", clearWhenEmpty: "omit" },
+        description: "Path to the Telos Pi executable. Leave empty to use the local checkout.",
+        providerSettingsForm: { placeholder: DEFAULT_TELOS_PI_BINARY, clearWhenEmpty: "omit" },
       }),
     ),
     launchArgs: TrimmedString.pipe(

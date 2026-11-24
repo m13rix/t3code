@@ -169,10 +169,12 @@ function providerConfigString(config: unknown, key: string): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
-const PROVIDER_SETTINGS = providerClients.definitions.map((definition) => ({
-  provider: definition.driverKind,
-  hasDefaultInstance: definition.hasDefaultInstance !== false,
-}));
+const PROVIDER_SETTINGS = providerClients.definitions
+  .filter((definition) => definition.driverKind === "pi")
+  .map((definition) => ({
+    provider: definition.driverKind,
+    hasDefaultInstance: definition.hasDefaultInstance !== false,
+  }));
 
 function configuredBinaryPath(config: unknown): string {
   if (config === null || typeof config !== "object" || !("binaryPath" in config)) return "";
@@ -798,7 +800,7 @@ export function EnvironmentProviderSettings({
     }
   }
   for (const [driver, list] of instancesByDriver) {
-    if (visibleDriverKinds.has(driver)) continue;
+    if (driver !== "pi" || visibleDriverKinds.has(driver)) continue;
     for (const [id, instance] of list) {
       rows.push({
         instanceId: id,

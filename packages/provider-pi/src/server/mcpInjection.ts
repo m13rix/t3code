@@ -33,6 +33,7 @@ const RESERVED_PI_LAUNCH_ARGUMENTS = new Set([
 ]);
 
 export const PI_ARGUMENTS_WITH_VALUES = new Set([
+  "--agent",
   "--api-key",
   "--append-system-prompt",
   "--exclude-tools",

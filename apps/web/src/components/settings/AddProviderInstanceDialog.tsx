@@ -67,12 +67,12 @@ import { ProviderEnvironmentSection } from "./ProviderInstanceCard";
 import { useSecretSources } from "./SecretSourceInput";
 
 const INSTANCE_ID_PATTERN = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
-const DEFAULT_DRIVER_KIND = ProviderDriverKind.make("codex");
+const DEFAULT_DRIVER_KIND = ProviderDriverKind.make("pi");
 const ACP_REGISTRY_DRIVER_KIND = ProviderDriverKind.make("acpRegistry");
-const DEFAULT_DRIVER_OPTION = providerClients.definitions[0]!;
 const DRIVER_OPTIONS = providerClients.definitions.filter(
-  (option) => option.driverKind !== ACP_REGISTRY_DRIVER_KIND,
+  (option) => option.driverKind === DEFAULT_DRIVER_KIND,
 );
+const DEFAULT_DRIVER_OPTION = DRIVER_OPTIONS[0]!;
 const FEATURED_DRIVER_OPTIONS = DRIVER_OPTIONS.filter((option) => option.featured !== false);
 const MORE_DRIVER_OPTIONS = DRIVER_OPTIONS.filter((option) => option.featured === false);
 const EMPTY_CONFIG_DRAFT: Record<string, unknown> = {};
@@ -180,7 +180,7 @@ export function AddProviderInstanceDialog({
   const moreDriverOptions = MORE_DRIVER_OPTIONS.filter((option) =>
     isManagedDriverAllowed(managedPolicy, option.driverKind),
   );
-  const acpRegistryAllowed = isManagedDriverAllowed(managedPolicy, ACP_REGISTRY_DRIVER_KIND);
+  const acpRegistryAllowed = false;
   const [driver, setDriver] = useState<ProviderDriverKind>(
     () =>
       (featuredDriverOptions[0] ?? moreDriverOptions[0])?.driverKind ??
@@ -211,6 +211,7 @@ export function AddProviderInstanceDialog({
   const driverOption = providerClients.get(driver) ?? DEFAULT_DRIVER_OPTION;
   const isAcpRegistry = driver === ACP_REGISTRY_DRIVER_KIND;
   const showRegistrySearch =
+    acpRegistryAllowed &&
     !createdInstanceId &&
     !addingChatGptAccount &&
     wizardStep === 0 &&

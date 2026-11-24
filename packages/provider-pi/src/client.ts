@@ -5,8 +5,7 @@ import { PiSettings } from "./settings.ts";
 
 export const piClient = defineProviderClient({
   driverKind: ProviderDriverKind.make("pi"),
-  label: "Pi",
-  acpRegistryAgentIds: ["pi-acp"],
+  label: "Telos Pi",
   settingsSchema: PiSettings,
   icon: {
     viewBox: "165.29 165.29 469.43 469.43",

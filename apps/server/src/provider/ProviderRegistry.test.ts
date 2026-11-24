@@ -4348,19 +4348,16 @@ it.layer(
       );
     });
 
-    it.effect("re-probes when settings change the codex binaryPath", () =>
+    it.effect("does not probe a restricted codex instance after its settings change", () =>
       Effect.gen(function* () {
         const firstMissing = `t3code_codex_first_`;
         const secondMissing = `t3code_codex_second_`;
         const spawnedCommands: Array<string> = [];
-        const secondProbeStarted = yield* Deferred.make<void>();
-        const releaseSecondProbe = yield* Deferred.make<void>();
-        const allowLazySettingsStream = yield* Deferred.make<void>();
         const mutableServerSettings = yield* makeMutableServerSettingsService(
           decodeServerSettings(
             deepMerge(encodedDefaultServerSettings, {
               providerInstances: {
-                ...disabledDefaultSlots("claudeAgent", "cursor", "grok", "opencode"),
+                ...disabledDefaultSlots("claudeAgent", "cursor", "grok", "opencode", "pi"),
                 [ProviderInstanceId.make("codex")]: {
                   driver: ProviderDriverKind.make("codex"),
                   enabled: true,
@@ -4370,14 +4367,7 @@ it.layer(
             }),
           ),
         );
-        const serverSettings = {
-          ...mutableServerSettings,
-          streamChanges: Stream.unwrap(
-            Deferred.await(allowLazySettingsStream).pipe(
-              Effect.as(mutableServerSettings.streamChanges),
-            ),
-          ),
-        } satisfies ServerSettingsModule.ServerSettingsService["Service"];
+        const serverSettings = mutableServerSettings;
         const scope = yield* Scope.make();
         yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
         const layerProviderRegistry = ProviderRegistry.layer.pipe(
@@ -4420,13 +4410,7 @@ it.layer(
             ChildProcessSpawner.make((command) => {
               if (command._tag !== "StandardCommand") return spawner.spawn(command);
               spawnedCommands.push(command.command);
-              const beforeSpawn =
-                command.command === secondMissing
-                  ? Deferred.succeed(secondProbeStarted, undefined).pipe(
-                      Effect.andThen(Deferred.await(releaseSecondProbe)),
-                    )
-                  : Effect.void;
-              return beforeSpawn.pipe(Effect.andThen(spawner.spawn(command)));
+              return spawner.spawn(command);
             }),
           ),
           Layer.provideMerge(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer)),
@@ -4438,51 +4422,25 @@ it.layer(
 
         yield* Effect.gen(function* () {
           const registry = yield* ProviderRegistry.ProviderRegistry;
-          const codexSnapshots = registry.streamChanges.pipe(
-            Stream.map((providers) =>
-              providers.find((provider) => provider.instanceId === "codex"),
-            ),
-            Stream.filter((provider): provider is ServerProvider => provider !== undefined),
+          const instanceRegistry = yield* ProviderInstanceRegistry.ProviderInstanceRegistry;
+          const mutator = yield* ProviderInstanceRegistryMutator.ProviderInstanceRegistryMutator;
+          const instanceId = ProviderInstanceId.make("codex");
+          assert.isUndefined(yield* instanceRegistry.getInstance(instanceId));
+          assert.strictEqual(
+            (yield* registry.getProviders).find((provider) => provider.instanceId === instanceId)
+              ?.unavailableReason,
+            "Only the Pi driver is available in this build.",
           );
-          const firstError = yield* Stream.toPull(
-            codexSnapshots.pipe(Stream.filter((provider) => provider.status === "error")),
-          );
-          const currentCodex = (yield* registry.getProviders).find(
-            (provider) => provider.instanceId === "codex",
-          );
-          const initialCodex =
-            currentCodex?.status === "error" ? currentCodex : (yield* firstError)[0];
-          assert.strictEqual(initialCodex?.status, "error");
-          assert.strictEqual(initialCodex?.installed, false);
-          assert.deepStrictEqual(spawnedCommands, [firstMissing]);
-
-          const pendingRebuild = yield* Stream.toPull(
-            codexSnapshots.pipe(
-              Stream.filter((provider) => provider.status === "warning" && !provider.installed),
-            ),
-          );
-          yield* serverSettings.updateSettings({
-            providerInstances: {
-              ...disabledDefaultSlots("claudeAgent", "cursor", "grok", "opencode"),
-              [ProviderInstanceId.make("codex")]: {
-                driver: ProviderDriverKind.make("codex"),
-                enabled: true,
-                config: { binaryPath: secondMissing },
-              },
+          yield* mutator.reconcile({
+            [instanceId]: {
+              driver: ProviderDriverKind.make("codex"),
+              enabled: true,
+              config: { binaryPath: secondMissing },
             },
           });
-          yield* Deferred.succeed(allowLazySettingsStream, undefined);
-
-          yield* Deferred.await(secondProbeStarted);
-          yield* pendingRebuild;
-          const rebuiltError = yield* Stream.toPull(
-            codexSnapshots.pipe(Stream.filter((provider) => provider.status === "error")),
-          );
-          yield* Deferred.succeed(releaseSecondProbe, undefined);
-          const [reprobedCodex] = yield* rebuiltError;
-          assert.deepStrictEqual(spawnedCommands, [firstMissing, secondMissing]);
-          assert.strictEqual(reprobedCodex?.status, "error");
-          assert.strictEqual(reprobedCodex?.installed, false);
+          assert.isUndefined(yield* instanceRegistry.getInstance(instanceId));
+          assert.notInclude(spawnedCommands, firstMissing);
+          assert.notInclude(spawnedCommands, secondMissing);
         }).pipe(Effect.provide(runtimeServices));
       }),
     );
@@ -4558,7 +4516,10 @@ it.layer(
           assert.strictEqual(ghost?.driver, "ghostDriver");
           assert.strictEqual(ghost?.availability, "unavailable");
           assert.strictEqual(Object.hasOwn(ghost ?? {}, "setup"), false);
-          assert.match(ghost?.unavailableReason ?? "", /ghostDriver/);
+          assert.strictEqual(
+            ghost?.unavailableReason,
+            "Only the Pi driver is available in this build.",
+          );
         }).pipe(Effect.provide(runtimeServices));
       }),
     );
