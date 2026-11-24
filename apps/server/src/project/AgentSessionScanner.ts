@@ -9,6 +9,8 @@ import {
   CodexSettings,
   ProviderDriverKind,
   ProviderInstanceId,
+  isPiNamedAgentName,
+  piNamedAgentInstanceId,
   resolveProviderInstanceEnabled,
   type AgentSessionProjectCandidate,
   type AgentSessionProjectGit,
@@ -126,6 +128,8 @@ const TranscriptRecord = Schema.Struct({
   // Pi entries form a tree through id/parentId; session_info entries carry its name.
   id: Schema.optional(Schema.String),
   parentId: Schema.optional(Schema.NullOr(Schema.String)),
+  customType: Schema.optional(Schema.String),
+  data: Schema.optional(Schema.Struct({ name: Schema.optional(Schema.String) })),
   name: Schema.optional(Schema.String),
   timestamp: Schema.optional(Schema.String),
   cwd: Schema.optional(Schema.String),
@@ -511,7 +515,16 @@ export function parseAgentSessionTranscript(
   lines = splitTranscriptRecords(input.contents, MAX_IMPORT_RECORDS + 1),
 ): AgentSessionThread | null {
   if (lines.length > MAX_IMPORT_RECORDS) return null;
-  const records = lines.flatMap((line) => Option.toArray(decodeTranscriptRecord(line)));
+  const records = lines.flatMap((line) => {
+    const decoded = decodeTranscriptRecord(line);
+    if (Option.isSome(decoded)) return [decoded.value];
+    if (input.source !== "pi") return [];
+    try {
+      return Option.toArray(decodePiEntryLinks(JSON.parse(line)));
+    } catch {
+      return [];
+    }
+  });
   const claudeFields =
     input.source === "claudeAgent"
       ? records.reduce(foldClaudeFields, emptyClaudeFields)
@@ -527,6 +540,18 @@ function parseAgentSessionRecords(
   droppedMessageCount: number,
 ): AgentSessionThread | "empty" | null {
   const fallbackTimestamp = DateTime.formatIso(DateTime.makeUnsafe(input.lastActiveAtMs));
+  const piBranch = input.source === "pi" ? activePiBranch(records) : undefined;
+  const agentName = piBranch?.findLast(
+    (record) =>
+      record.type === "custom" &&
+      record.customType === "agent_selection" &&
+      typeof record.data?.name === "string",
+  )?.data?.name;
+  let providerInstanceId = input.providerInstanceId;
+  if (agentName !== undefined) {
+    if (!isPiNamedAgentName(agentName)) return null;
+    providerInstanceId = piNamedAgentInstanceId(agentName);
+  }
   // Claude filenames are session IDs. Codex rollout filenames include extra
   // timestamp text, so only transcript metadata can provide a resumable ID.
   let providerSessionId =
@@ -640,7 +665,7 @@ function parseAgentSessionRecords(
   };
 
   let recordIndex = -1;
-  for (const record of input.source === "pi" ? activePiBranch(records) : records) {
+  for (const record of piBranch ?? records) {
     recordIndex += 1;
     if (input.source === "pi") {
       if (!isPiConversationRecord(record)) continue;
@@ -759,7 +784,7 @@ function parseAgentSessionRecords(
 
   return {
     source: input.source,
-    providerInstanceId: input.providerInstanceId,
+    providerInstanceId,
     providerSessionId,
     title:
       claudeFields.customTitle ?? title ?? derivedTitle ?? bareCommandTitle ?? "Imported thread",
@@ -2356,13 +2381,15 @@ export const make = Effect.gen(function* () {
             savedTitle = names.get(parsedThread.providerSessionId);
           }
 
+          // Source identity remains tied to the scanned home, so named-agent bindings do not
+          // change import IDs or duplicate previously imported transcripts.
           const source: AgentSessionImportSource = {
             ...identity,
             provider: parsedThread.source,
-            providerInstanceId: parsedThread.providerInstanceId,
+            providerInstanceId: candidate.providerInstanceId,
             providerSessionId: parsedThread.providerSessionId,
           };
-          const sessionKey = `${parsedThread.providerInstanceId}\0${parsedThread.providerSessionId}`;
+          const sessionKey = `${candidate.providerInstanceId}\0${parsedThread.providerSessionId}`;
           if (importedSessions.has(sessionKey)) {
             return Option.some<AgentSessionRecentThread>({ _tag: "Duplicate", source });
           }

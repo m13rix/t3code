@@ -17,4 +17,10 @@ T3CODE_HOME="$HOME/.t3-telos" T3CODE_DISABLE_AUTO_UPDATE=true corepack pnpm run 
 
 Keep `T3CODE_HOME` separate from existing T3 Code installations. This changes T3's state directory, not Pi's; Pi still reads its usual credentials, models, extensions, skills, and settings unless you configure a different `PI_CODING_AGENT_DIR`.
 
+## Named agents and project trust
+
+Use the **Agent** picker before starting a thread. **Auto** leaves the definition unset; a named choice uses that definition’s settings, extensions, skills, prompts, and MCP configuration through Pi. Model and reasoning can change without changing the thread’s agent. Imported Pi sessions keep the agent saved in their transcript.
+
+The picker discovers user definitions under `<agent-dir>/agents/` and project definitions under `.pi/agents/` in each registered workspace. Workspace configuration still requires Pi’s own trust. If Pi warns that it skipped project configuration, open the same directory in T3’s terminal, run the Telos Pi executable, and use `/trust` if you trust the directory. Then start a new thread there. There is no need to enable trust globally.
+
 To sign in or use an interactive-only Pi feature, open T3's project terminal and run the same Telos Pi executable without `--mode rpc`. Native RPC supports the core session and extension-dialog interactions, but the T3 chat does not recreate Pi's custom TUI components. An independent terminal process does not attach to an already-running T3 Pi session.

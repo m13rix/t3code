@@ -10,6 +10,7 @@ import {
   AgentSessionSource,
   EventId,
   MessageId,
+  piNamedAgentName,
   ProjectId,
   ProviderDriverKind,
   ThreadId,
@@ -27,6 +28,7 @@ import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import * as Context from "effect/Context";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
@@ -596,7 +598,103 @@ const make = Effect.gen(function* () {
     return yield* commit(messages);
   });
 
-  return { importRecentAgentThreads, importNativeHistory };
+  // Before command readiness, upgrade untouched imports made before Pi identities were recorded.
+  const restoreNamedPiImports = Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const rows = yield* runtimes.list();
+    yield* Effect.forEach(
+      rows,
+      (runtime) =>
+        Effect.gen(function* () {
+          if (
+            runtime.providerName !== "pi" ||
+            runtime.status !== "stopped" ||
+            runtime.providerInstanceId !== "pi" ||
+            !runtime.threadId.startsWith("import:pi:")
+          )
+            return;
+          const payload = AgentSessionScanner.decodeImportedTranscriptPayload(
+            runtime.runtimePayload,
+          );
+          if (Option.isNone(payload)) return;
+          const source = payload.value.importedTranscripts?.find(
+            ({ provider }) => provider === "pi",
+          );
+          if (source === undefined || !source.filePath.endsWith(".jsonl")) return;
+          const current = yield* orchestrator.getThreadRecords(runtime.threadId, [
+            "runs",
+            "providerThreads",
+            "providerSessions",
+          ]);
+          const { thread, runs, providerThreads, providerSessions } = current;
+          const binding = providerThreads.find(({ id }) => id === thread.activeProviderThreadId);
+          if (
+            thread.historyOrigin !== "v1_import" ||
+            thread.providerInstanceId !== "pi" ||
+            runs.length !== 0 ||
+            providerSessions.length !== 0 ||
+            binding?.driver !== "pi" ||
+            binding.providerSessionId !== null ||
+            binding.nativeThreadRef?.nativeId !== source.filePath
+          )
+            return;
+          const info = yield* fs.stat(source.filePath);
+          if (info.type !== "File" || info.size > BigInt(4 * 1024 * 1024)) return;
+          const parsed = AgentSessionScanner.parseAgentSessionTranscript({
+            source: "pi",
+            providerInstanceId: runtime.providerInstanceId,
+            fallbackSessionId: source.providerSessionId,
+            lastActiveAtMs: Date.parse(runtime.lastSeenAt),
+            contents: yield* fs.readFileString(source.filePath),
+          });
+          if (
+            parsed === null ||
+            parsed.providerSessionId !== source.providerSessionId ||
+            piNamedAgentName(parsed.providerInstanceId) === undefined
+          )
+            return;
+          const providerInstanceId = parsed.providerInstanceId;
+          const providerThread = { ...binding, providerInstanceId };
+          yield* eventSink.withProviderBatch(
+            Effect.gen(function* () {
+              const committed = yield* eventSink.write({
+                unlessNativeThreadOwned: providerThread,
+                events: [
+                  {
+                    id: EventId.make(`${IMPORT_EVENT_PREFIX}:named-pi-binding:${thread.id}`),
+                    type: "provider-thread.updated",
+                    threadId: thread.id,
+                    providerInstanceId,
+                    occurredAt: thread.updatedAt,
+                    payload: providerThread,
+                  },
+                  {
+                    id: EventId.make(`${IMPORT_EVENT_PREFIX}:named-pi-selection:${thread.id}`),
+                    type: "thread.provider-switched",
+                    threadId: thread.id,
+                    providerInstanceId,
+                    occurredAt: thread.updatedAt,
+                    payload: {
+                      ...thread,
+                      providerInstanceId,
+                      modelSelection: { ...thread.modelSelection, instanceId: providerInstanceId },
+                    },
+                  },
+                ],
+              });
+              if (committed.length > 0) yield* runtimes.upsert({ ...runtime, providerInstanceId });
+            }),
+          );
+        }).pipe(
+          Effect.catch((cause) =>
+            Effect.logDebug("Unable to recover the agent name for an older Pi import", { cause }),
+          ),
+        ),
+      { discard: true },
+    );
+  });
+
+  return { importRecentAgentThreads, importNativeHistory, restoreNamedPiImports };
 });
 
 type AgentSessionImporterShape = Effect.Success<typeof make>;

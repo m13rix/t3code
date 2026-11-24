@@ -1,5 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { expect, it } from "@effect/vitest";
+import { assert, expect, it } from "@effect/vitest";
 import {
   type AgentSessionSource,
   type ServerSettingsError,
@@ -280,9 +280,61 @@ const makeImporter = Effect.fn(function* (
   return {
     run: importer.importRecentAgentThreads({ projectId }),
     importNativeHistory: importer.importNativeHistory,
+    restoreNamedPiImports: importer.restoreNamedPiImports,
     published,
   };
 });
+
+it.effect(
+  "restores the identity of an untouched older Pi import without changing its native binding ID",
+  () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const directory = yield* fs.makeTempDirectoryScoped();
+      const source = candidate(PI_MODEL_SELECTION, "old-pi-import", "pi");
+      source.source.filePath = path.join(directory, "untouched.jsonl");
+      yield* fs.writeFileString(
+        source.source.filePath,
+        [
+          { type: "session", id: source.source.providerSessionId, cwd: directory, timestamp },
+          {
+            type: "custom",
+            id: "agent",
+            parentId: null,
+            customType: "agent_selection",
+            data: { name: "reviewer" },
+            timestamp,
+          },
+          {
+            type: "message",
+            id: "message",
+            parentId: "agent",
+            message: { role: "user", content: "Fix it" },
+            timestamp,
+          },
+        ]
+          .map((line) => JSON.stringify(line))
+          .join("\n"),
+      );
+      const importer = yield* makeImporter([source]);
+      yield* importer.run;
+      const threadId = importId(source);
+      const projections = yield* ProjectionStore.ProjectionStoreV2;
+      const runtimes = yield* ProviderSessionRuntime.ProviderSessionRuntimeRepository;
+      const before = yield* projections.getThreadRecords(threadId, ["providerThreads", "messages"]);
+      assert.strictEqual(before.thread.providerInstanceId, "pi");
+      yield* importer.restoreNamedPiImports;
+      yield* importer.restoreNamedPiImports;
+      const after = yield* projections.getThreadRecords(threadId, ["providerThreads", "messages"]);
+      assert.strictEqual(after.thread.modelSelection.instanceId, "pi-agent-reviewer");
+      assert.strictEqual(after.providerThreads[0]?.id, before.providerThreads[0]?.id);
+      assert.strictEqual(after.providerThreads[0]?.providerInstanceId, "pi-agent-reviewer");
+      assert.deepEqual(after.messages, before.messages);
+      const runtime = Option.getOrThrow(yield* runtimes.getByThreadId({ threadId }));
+      assert.strictEqual(runtime.providerInstanceId, "pi-agent-reviewer");
+    }).pipe(Effect.scoped, Effect.provide(Layer.merge(persistence, NodeServices.layer))),
+);
 
 it.effect(
   "ignores owned sessions, including archived and deleted threads, but imports other instances and unowned sessions",
@@ -317,6 +369,7 @@ it.effect(
       unowned.thread.omittedMessageCount = 1;
       unowned.worktree = { path: "/workspace/project/.claude/worktrees/feat", branch: "feat" };
       const unownedPi = candidate(PI_MODEL_SELECTION, "unowned-pi", "pi");
+      unownedPi.thread.providerInstanceId = ProviderInstanceId.make("pi-agent-reviewer");
       const importer = yield* makeImporter([
         active,
         archived,
@@ -367,13 +420,18 @@ it.effect(
         } else {
           expect(notices).toEqual([]);
         }
+        expect(records.thread.providerInstanceId).toBe(source.thread.providerInstanceId);
+        expect(records.thread.modelSelection.instanceId).toBe(source.thread.providerInstanceId);
+        expect(records.providerThreads[0]?.providerInstanceId).toBe(
+          source.thread.providerInstanceId,
+        );
         expect(records.thread.historyOrigin).toBe("v1_import");
         expect(records.thread.worktreePath).toBe(source.worktree?.path ?? null);
         expect(records.thread.branch).toBe(source.worktree?.branch ?? null);
         expect(records.thread.activeProviderThreadId).toBe(records.providerThreads[0]?.id);
         expect(records.providerThreads[0]?.nativeThreadRef?.nativeId).toBe(nativeId(source));
         expect(Option.getOrThrow(yield* runtimes.getByThreadId({ threadId }))).toMatchObject({
-          providerInstanceId: source.source.providerInstanceId,
+          providerInstanceId: source.thread.providerInstanceId,
           resumeCursor:
             source.source.provider === "claudeAgent"
               ? { threadId, resume: source.source.providerSessionId }

@@ -3953,6 +3953,11 @@ export default function ChatView(props: ChatViewProps) {
                                 getShortcutContext={getShortcutContextStable}
                                 terminalOpen={Boolean(terminalUiState.terminalOpen)}
                                 gitCwd={gitCwd}
+                                projectWorkspaceCwd={
+                                  isLocalDraftThread && envMode === "worktree"
+                                    ? (activeProject?.workspaceRoot ?? null)
+                                    : null
+                                }
                                 pullRequestProjectId={
                                   supportsPullRequests ? (activeProject?.id ?? null) : null
                                 }

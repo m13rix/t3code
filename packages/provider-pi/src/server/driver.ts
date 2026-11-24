@@ -1,5 +1,5 @@
 // User-wide ~/.pi/agent state makes continuation identity use default instance grouping.
-import { ProviderDriverKind, type ServerProvider } from "@t3tools/contracts";
+import { piNamedAgentName, ProviderDriverKind, type ServerProvider } from "@t3tools/contracts";
 import { DEFAULT_TELOS_PI_BINARY, PiSettings } from "../settings.ts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -49,6 +49,7 @@ const withInstanceIdentity =
     readonly displayName: string | undefined;
     readonly accentColor: string | undefined;
     readonly continuationGroupKey: string;
+    readonly namedAgentWorkspaces?: ReadonlyArray<string>;
   }) =>
   (snapshot: ServerProviderDraft): ServerProvider => ({
     ...snapshot,
@@ -57,6 +58,9 @@ const withInstanceIdentity =
     ...(input.displayName ? { displayName: input.displayName } : {}),
     ...(input.accentColor ? { accentColor: input.accentColor } : {}),
     continuation: { groupKey: input.continuationGroupKey },
+    ...(input.namedAgentWorkspaces === undefined
+      ? {}
+      : { piNamedAgentWorkspaces: input.namedAgentWorkspaces }),
   });
 
 export const PiDriver: ProviderDriver<PiSettings, PiDriverEnv, Path.Path> = {
@@ -82,6 +86,8 @@ export const PiDriver: ProviderDriver<PiSettings, PiDriverEnv, Path.Path> = {
     const host = yield* ProviderHost.ProviderHost;
     // Pi runs extensions' session_start in its cwd; the server's cwd is $HOME on packaged desktop.
     const probeCwd = pathService.join(host.paths.providerStatusCacheDir, "pi-status-probe");
+    const namedAgent = piNamedAgentName(instanceId);
+    const namedAgentWorkspaces = namedAgent === undefined ? undefined : config.namedAgentWorkspaces;
     const processEnv = yield* mergeProviderInstanceEnvironment(environment);
     const continuationIdentity = defaultProviderContinuationIdentity({
       driverKind: DRIVER_KIND,
@@ -92,6 +98,7 @@ export const PiDriver: ProviderDriver<PiSettings, PiDriverEnv, Path.Path> = {
       displayName,
       accentColor,
       continuationGroupKey: continuationIdentity.continuationKey,
+      ...(namedAgentWorkspaces === undefined ? {} : { namedAgentWorkspaces }),
     });
     // Migrate the stock default without overriding an explicitly configured executable.
     const configuredBinary = config.binaryPath;
@@ -99,7 +106,15 @@ export const PiDriver: ProviderDriver<PiSettings, PiDriverEnv, Path.Path> = {
       configuredBinary === DEFAULT_TELOS_PI_BINARY || configuredBinary === "pi"
         ? processEnv.TELOS_PI_BINARY?.trim() || DEFAULT_TELOS_PI_BINARY
         : configuredBinary;
-    const effectiveConfig = { ...config, enabled, binaryPath } satisfies PiSettings;
+    const effectiveConfig = {
+      ...config,
+      enabled,
+      binaryPath,
+      launchArgs:
+        namedAgent === undefined
+          ? config.launchArgs
+          : `${config.launchArgs} --agent ${namedAgent}`.trim(),
+    } satisfies PiSettings;
     // Update the Telos checkout itself, not the upstream Pi npm package.
     const resolveMaintenance = () =>
       Effect.succeed(
@@ -139,7 +154,12 @@ export const PiDriver: ProviderDriver<PiSettings, PiDriverEnv, Path.Path> = {
       .pipe(
         Effect.ignore,
         Effect.andThen(
-          checkPiProviderStatus(effectiveConfig, processEnv, probeCwd, host.compatibility),
+          checkPiProviderStatus(
+            effectiveConfig,
+            processEnv,
+            namedAgentWorkspaces?.[0] ?? probeCwd,
+            host.compatibility,
+          ),
         ),
         Effect.map(stampIdentity),
         Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
@@ -177,27 +197,41 @@ export const PiDriver: ProviderDriver<PiSettings, PiDriverEnv, Path.Path> = {
       snapshotForCwd: (workspaceCwd) =>
         !effectiveConfig.enabled
           ? snapshot.getSnapshot
-          : Effect.all([
-              snapshot.getSnapshot,
-              discoverPiCommandsForCwd(effectiveConfig, processEnv, workspaceCwd).pipe(
+          : namedAgent !== undefined
+            ? checkPiProviderStatus(
+                effectiveConfig,
+                processEnv,
+                workspaceCwd,
+                host.compatibility,
+              ).pipe(
                 Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
-                Effect.mapError(
-                  (cause) =>
-                    new ProviderDriverError({
-                      driver: DRIVER_KIND,
-                      instanceId,
-                      detail: "Failed to discover Pi workspace commands.",
-                      cause,
-                    }),
+                Effect.map((status) => ({
+                  ...stampIdentity(status),
+                  workspaceModels: status.models,
+                  slashCommandsPending: false,
+                })),
+              )
+            : Effect.all([
+                snapshot.getSnapshot,
+                discoverPiCommandsForCwd(effectiveConfig, processEnv, workspaceCwd).pipe(
+                  Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+                  Effect.mapError(
+                    (cause) =>
+                      new ProviderDriverError({
+                        driver: DRIVER_KIND,
+                        instanceId,
+                        detail: "Failed to discover Pi workspace commands.",
+                        cause,
+                      }),
+                  ),
                 ),
+              ]).pipe(
+                Effect.map(([machineSnapshot, commands]) => ({
+                  ...machineSnapshot,
+                  ...commands,
+                  slashCommandsPending: false,
+                })),
               ),
-            ]).pipe(
-              Effect.map(([machineSnapshot, commands]) => ({
-                ...machineSnapshot,
-                ...commands,
-                slashCommandsPending: false,
-              })),
-            ),
       orchestrationAdapter,
       textGeneration,
     } satisfies ProviderInstance;

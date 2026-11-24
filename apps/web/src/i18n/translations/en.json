@@ -12807,5 +12807,11 @@
     ")"
   ],
   "33d18dda74f6d7b3": "Cancel stack auto-merge",
-  "012c67c7f1a99e33": "Auto-merge stack"
+  "012c67c7f1a99e33": "Auto-merge stack",
+  "3dd331a1a2ae08b1": "Select agent",
+  "053b7057b5b854d1": "Search agents",
+  "43e117f0516a9993": "No agents found",
+  "00fe93ec53f36089": "Faster",
+  "51976da73c902f92": "Smarter",
+  "393d7bfc71efec5c": "Reasoning"
 }

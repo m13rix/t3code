@@ -1696,12 +1696,26 @@ it.layer(NodeServices.layer)("AgentSessionScanner", (it) => {
               cwd: workspace,
             }),
             piMessage("a1", null, { role: "user", content: "Plan the change" }),
-            piMessage("a2", "a1", {
+            encodeTranscriptRecord({
+              type: "custom",
+              id: "abandoned",
+              parentId: "a1",
+              customType: "agent_selection",
+              data: { name: "wrong" },
+            }),
+            piMessage("a2", "abandoned", {
               role: "assistant",
               content: [{ type: "text", text: "Abandoned answer" }],
             }),
             piMessage("a3", "a2", { role: "user", content: "Abandoned follow-up" }),
-            piMessage("b1", "a1", {
+            encodeTranscriptRecord({
+              type: "custom",
+              id: "selection",
+              parentId: "a1",
+              customType: "agent_selection",
+              data: { name: "reviewer" },
+            }),
+            piMessage("b1", "selection", {
               role: "assistant",
               content: [
                 { type: "thinking", thinking: "Hidden reasoning" },
@@ -1762,7 +1776,11 @@ it.layer(NodeServices.layer)("AgentSessionScanner", (it) => {
           ["Fix the project", "Done"],
           ["Legacy prompt", "Legacy answer"],
         ]);
-        expect(threads[0]).toMatchObject({ source: "pi", title: "Pi refactor" });
+        expect(threads[0]).toMatchObject({
+          source: "pi",
+          title: "Pi refactor",
+          providerInstanceId: "pi-agent-reviewer",
+        });
       }),
     );
 
@@ -3443,6 +3461,33 @@ describe.skipIf(HostProcess.Platform.defaultValue() === "win32")(
 );
 
 describe("parseAgentSessionTranscript", () => {
+  it("uses the last validly shaped Pi agent selection on the active branch and rejects invalid names", () => {
+    const parse = (name: unknown) =>
+      AgentSessionScanner.parseAgentSessionTranscript({
+        source: "pi",
+        providerInstanceId: ProviderInstanceId.make("pi"),
+        fallbackSessionId: "id",
+        lastActiveAtMs: Date.parse("2026-08-24T12:00:00.000Z"),
+        contents: [
+          { type: "session", id: "id" },
+          {
+            type: "custom",
+            id: "a",
+            parentId: null,
+            customType: "agent_selection",
+            data: { name: "first" },
+          },
+          { type: "custom", id: "b", parentId: "a", customType: "agent_selection", data: { name } },
+          { type: "message", id: "c", parentId: "b", message: { role: "user", content: "Hello" } },
+        ]
+          .map(encodeTranscriptRecord)
+          .join("\n"),
+      });
+    expect(parse("second")?.providerInstanceId).toBe("pi-agent-second");
+    expect(parse(42)?.providerInstanceId).toBe("pi-agent-first");
+    expect(parse("../bad")).toBeNull();
+  });
+
   it.each([false, true])(
     "handles the exact record limit and an interior blank overflow=%s",
     (overflow) => {

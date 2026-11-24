@@ -443,6 +443,7 @@ export interface ChatComposerProps {
   getShortcutContext: (eventTarget: EventTarget | null) => ShortcutMatchContext;
   terminalOpen: boolean;
   gitCwd: string | null;
+  projectWorkspaceCwd?: string | null;
   pullRequestProjectId: ProjectId | null;
   pullRequestRepository: string | null;
   threadPullRequests: ReadonlyArray<ThreadPullRequestLink> | undefined;
@@ -977,6 +978,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     promptInjectionState: getComposerPromptInjectionState(prompt),
     threadStarted: threadHasStarted(activeThread),
     isDraftThread: routeKind === "draft",
+    workspaceCwd: gitCwd,
+    projectWorkspaceCwd: props.projectWorkspaceCwd ?? null,
     candidateInstanceIds: [
       activeThread?.runtime?.providerInstanceId,
       activeThreadModelSelection?.instanceId,
@@ -2728,6 +2731,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       lockedProvider={lockedProvider}
       lockedContinuationGroupKey={lockedContinuationGroupKey}
       providerInstanceEntries={providerInstanceEntries}
+      agentSelectionLocked={threadHasStarted(activeThread)}
       keybindings={keybindings}
       modelOptionsByInstance={modelOptionsByInstance}
       terminalOpen={terminalOpen}

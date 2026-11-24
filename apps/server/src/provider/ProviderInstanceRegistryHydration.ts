@@ -32,6 +32,8 @@ import type * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
 import type * as BackgroundPolicy from "../background/BackgroundPolicy.ts";
 import * as ServerConfig from "../config.ts";
 import type * as PortScanner from "../preview/PortScanner.ts";
+import * as ProjectStore from "../orchestration-v2/ProjectStore.ts";
+import { discoverPiNamedAgents } from "./PiNamedAgents.ts";
 
 type ProviderInstanceRegistryHydrationEnv =
   | Exclude<
@@ -146,20 +148,37 @@ export const layerSettingsWatcher = (
   settingsChanges: Stream.Stream<ServerSettings>,
   // The settings the registry was built from: a change queued during startup differs from these.
   initialSettings: ServerSettings | undefined,
+  catalog?: {
+    readonly initial: ProviderInstanceConfigMap;
+    readonly discover: (settings: ServerSettings) => Effect.Effect<ProviderInstanceConfigMap>;
+  },
 ) =>
   Layer.effectDiscard(
     Effect.gen(function* () {
       const mutator = yield* ProviderInstanceRegistryMutator.ProviderInstanceRegistryMutator;
       const serverSettings = yield* Settings.ServerSettingsService;
       let secretProviders = initialSettings && vaultConfigs(initialSettings);
-      yield* settingsChanges.pipe(
+      let previous = catalog?.initial;
+      const settingsTicks = settingsChanges.pipe(Stream.map(() => undefined));
+      const changes: Stream.Stream<void> =
+        catalog === undefined
+          ? settingsTicks
+          : Stream.merge(settingsTicks, Stream.tick("10 seconds"));
+      yield* changes.pipe(
         Stream.runForEach(() =>
           // The subscription predates the seed read, so a queued change can be
           // older than the seed. A failed current read must leave the registry intact.
           serverSettings.getSettings.pipe(
             Effect.flatMap((current) =>
               Effect.gen(function* () {
-                yield* mutator.reconcile(deriveProviderInstanceConfigMap(current));
+                const nextConfig =
+                  catalog === undefined
+                    ? deriveProviderInstanceConfigMap(current)
+                    : yield* catalog.discover(current);
+                if (previous === undefined || !NodeUtil.isDeepStrictEqual(previous, nextConfig)) {
+                  yield* mutator.reconcile(nextConfig);
+                  if (catalog !== undefined) previous = nextConfig;
+                }
                 // Reconcile leaves instances parked on an unreadable secret alone,
                 // and a corrected secret provider is what can make them readable.
                 const next = vaultConfigs(current);
@@ -192,16 +211,28 @@ export const layer: Layer.Layer<
     const initialSettings: ServerSettings | undefined = yield* serverSettings.getSettings.pipe(
       Effect.orElseSucceed(() => undefined),
     );
-    const initialConfigMap =
-      initialSettings === undefined
-        ? ({} as ProviderInstanceConfigMap)
-        : deriveProviderInstanceConfigMap(initialSettings);
-
     // Drivers launch from the host environment, minus launch overrides a policy ignores.
     const hostEnvironment = ManagedProviders.providerHostEnvironment(
       serverSettings.managedPolicy,
       yield* HostProcess.Environment,
     );
+    const projects = yield* ProjectStore.make;
+    const discover = (settings: ServerSettings) =>
+      projects.list().pipe(
+        Effect.orElseSucceed(() => []),
+        Effect.flatMap((rows) =>
+          discoverPiNamedAgents(
+            deriveProviderInstanceConfigMap(settings),
+            rows.map(({ workspaceRoot }) => workspaceRoot),
+          ),
+        ),
+        Effect.provideService(HostProcess.Environment, hostEnvironment),
+      );
+    const initialConfigMap =
+      initialSettings === undefined
+        ? ({} as ProviderInstanceConfigMap)
+        : yield* discover(initialSettings);
+    const discoverCurrent = yield* Effect.context<Effect.Services<ReturnType<typeof discover>>>();
     // Instances of drivers the policy leaves out stay listed, as unavailable, so their threads
     // explain why instead of losing their provider.
     const layerMutable = ProviderInstanceRegistry.layer({
@@ -216,9 +247,10 @@ export const layer: Layer.Layer<
       Layer.provide(SecretResolver.layer),
     );
 
-    return layerSettingsWatcher(settingsChanges, initialSettings).pipe(
-      Layer.provideMerge(layerMutable),
-    );
+    return layerSettingsWatcher(settingsChanges, initialSettings, {
+      initial: initialConfigMap,
+      discover: (settings) => discover(settings).pipe(Effect.provideContext(discoverCurrent)),
+    }).pipe(Layer.provideMerge(layerMutable));
   }),
 ) as Layer.Layer<
   | ProviderInstanceRegistry.ProviderInstanceRegistry

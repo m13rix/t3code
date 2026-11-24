@@ -1,0 +1,262 @@
+[data-telos-picker="agent-trigger"] {
+  border-radius: 999px;
+  font-size: 12.5px;
+}
+[data-telos-picker="agent-popup"] {
+  width: min(238px, calc(100vw - 16px));
+}
+[data-telos-picker="agent-search"] {
+  display: flex;
+  height: 44px;
+  align-items: center;
+  gap: 9px;
+  padding: 0 12px;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 8%, transparent);
+  color: var(--muted-foreground);
+}
+[data-telos-picker="agent-search"] input {
+  padding: 0;
+  font-size: 13px;
+}
+[data-telos-picker="agent-scroll"] {
+  max-height: 286px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 5px;
+  scrollbar-width: thin;
+}
+[data-telos-picker="agent-row"] {
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  align-items: center;
+  gap: 9px;
+  border-radius: 6px;
+  padding: 5px 7px;
+  text-align: left;
+  font-size: 12.5px;
+  font-weight: 570;
+  outline: none;
+}
+[data-telos-picker="agent-row"]:hover,
+[data-telos-picker="agent-row"]:focus-visible,
+[data-telos-picker="agent-row"][aria-selected="true"] {
+  background: color-mix(in srgb, currentColor 7%, transparent);
+}
+[data-telos-agent-auto][aria-selected="true"] {
+  background: rgb(74 222 128 / 7.5%);
+}
+[data-telos-picker="agent-divider"] {
+  height: 1px;
+  margin: 4px 7px;
+  background: color-mix(in srgb, currentColor 7%, transparent);
+}
+[data-telos-picker="agent-empty"] {
+  padding: 34px 12px;
+  text-align: center;
+  color: var(--muted-foreground);
+  font-size: 11.5px;
+}
+/* The three composer pickers share the mockup's compact glass menu. */
+[data-telos-picker="agent-trigger"] {
+  height: 30px;
+  gap: 6px;
+  padding: 0 9px 0 8px;
+  font-weight: 550;
+  letter-spacing: 0.002em;
+}
+[data-telos-picker="agent-trigger"][data-popup-open] {
+  background: color-mix(in srgb, currentColor 9%, transparent);
+  border-color: color-mix(in srgb, currentColor 10%, transparent);
+}
+[data-telos-picker="agent-popup"],
+[data-telos-picker="reasoning-popup"],
+[data-telos-picker="model-popup"] {
+  border-radius: 14px;
+}
+[data-telos-picker="agent-row"] {
+  border-radius: 8px;
+}
+[data-telos-picker="agent-row"] > svg:first-child {
+  width: 29px;
+  height: 20px;
+  padding-inline: 4px;
+}
+[data-telos-picker="agent-row"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+[data-telos-picker="reasoning-bolts"] {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  min-width: 13px;
+}
+[data-telos-picker="reasoning-bolts"] svg {
+  width: 16px;
+  height: 16px;
+  margin: -3px;
+  color: #e6c54f;
+  opacity: 0.78;
+}
+[data-telos-picker="reasoning-popup"] {
+  width: min(278px, calc(100vw - 16px));
+  padding: 13px 14px 10px;
+}
+[data-telos-picker="reasoning-slider"] {
+  position: relative;
+  height: 27px;
+}
+[data-telos-picker="reasoning-track"] {
+  position: absolute;
+  top: 11px;
+  right: 8px;
+  left: 8px;
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 13%, transparent);
+}
+[data-telos-picker="reasoning-fill"] {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--progress);
+  border-radius: inherit;
+  background: color-mix(in srgb, currentColor 86%, transparent);
+}
+[data-telos-picker="reasoning-tick"] {
+  position: absolute;
+  top: 50%;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: color-mix(in srgb, currentColor 46%, transparent);
+  transform: translate(-50%, -50%);
+}
+[data-telos-picker="reasoning-thumb"] {
+  position: absolute;
+  top: 50%;
+  left: var(--progress);
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 55%);
+  transform: translate(-50%, -50%);
+}
+[data-telos-picker="reasoning-slider"] input {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 27px;
+  margin: 0;
+  appearance: none;
+  outline: none;
+  background: transparent;
+  cursor: pointer;
+}
+[data-telos-picker="reasoning-slider"] input::-webkit-slider-runnable-track {
+  height: 27px;
+  background: transparent;
+}
+[data-telos-picker="reasoning-slider"] input::-webkit-slider-thumb {
+  width: 16px;
+  height: 27px;
+  appearance: none;
+  border: 0;
+  background: transparent;
+}
+[data-telos-picker="reasoning-slider"] input::-moz-range-track {
+  height: 27px;
+  background: transparent;
+}
+[data-telos-picker="reasoning-slider"] input::-moz-range-thumb {
+  width: 16px;
+  height: 27px;
+  border: 0;
+  background: transparent;
+}
+[data-telos-picker="reasoning-slider"]:has(input:focus-visible)
+  [data-telos-picker="reasoning-thumb"] {
+  outline: 2px solid color-mix(in srgb, currentColor 42%, transparent);
+  outline-offset: 3px;
+}
+[data-telos-picker="reasoning-slider"]:has(input:active) [data-telos-picker="reasoning-thumb"] {
+  transform: translate(-50%, -50%) scale(1.12);
+}
+[data-telos-picker="reasoning-ends"] {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 1px;
+  color: var(--muted-foreground);
+  font-size: 10.5px;
+  font-weight: 520;
+}
+[data-telos-picker="reasoning-value"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Scope the mock model list treatment to the Pi composer, not other model pickers. */
+[data-telos-picker="model-popup"] [data-model-picker-sidebar] {
+  width: 48px;
+  background: transparent;
+  border-right: 1px solid color-mix(in srgb, currentColor 6.5%, transparent);
+}
+[data-telos-picker="model-popup"]
+  [data-model-picker-sidebar]
+  [data-model-picker-selected-indicator] {
+  display: none;
+}
+[data-telos-picker="model-popup"] [data-model-picker-sidebar] [aria-pressed="true"] {
+  border-radius: 9px;
+  background: color-mix(in srgb, currentColor 9%, transparent);
+}
+[data-telos-picker="model-popup"]
+  [data-model-picker-sidebar]
+  [data-model-picker-provider="favorites"]
+  svg {
+  color: #f2c94c;
+}
+[data-telos-picker="model-popup"] [data-composer-model-row] {
+  min-height: 49px;
+  margin: 1px 0;
+  padding: 6px 6px 6px 8px;
+  border-radius: 8px;
+}
+[data-telos-picker="model-popup"] [data-composer-model-row][data-selected] {
+  background: color-mix(in srgb, currentColor 8.5%, transparent);
+}
+[data-telos-picker="model-popup"] [data-composer-model-leading-icon] {
+  display: none;
+}
+[data-telos-picker="model-popup"] [data-composer-model-copy] {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+[data-telos-picker="model-popup"] [data-composer-model-copy] > div:first-child {
+  width: 100%;
+  font-size: 12.5px;
+  font-weight: 620;
+}
+[data-telos-picker="model-popup"] [data-composer-model-series] {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 11.25px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+[data-telos-picker="model-popup"] [data-composer-model-copy] > svg,
+[data-telos-picker="model-popup"] [data-composer-model-inline-provider] {
+  display: none;
+}

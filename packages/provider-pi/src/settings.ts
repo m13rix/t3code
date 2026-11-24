@@ -31,6 +31,9 @@ export const PiSettings = makeProviderSettingsSchema(
         providerSettingsForm: { clearWhenEmpty: "omit" },
       }),
     ),
+    namedAgentWorkspaces: Schema.optionalKey(Schema.Array(TrimmedString)).pipe(
+      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
+    ),
     customModels: Schema.Array(CustomModelSetting).pipe(
       Schema.withDecodingDefault(Effect.succeed([])),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),

@@ -7,6 +7,7 @@ import {
 } from "@t3tools/contracts";
 import { RegistryContext } from "@effect/atom-react";
 import { T, useGT } from "gt-react";
+import { ChevronDownIcon } from "lucide-react";
 import {
   createContext,
   memo,
@@ -359,6 +360,11 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
               .join(", ")}
             size={size}
             data-chat-provider-model-picker="true"
+            data-telos-picker={
+              props.isComposerOwned && activeEntry?.driverKind === "pi"
+                ? "agent-trigger"
+                : undefined
+            }
             data-composer-shortcut={props.triggerShortcuts}
             onClick={(event) => {
               if (!isMenuOpen || !docked) return;
@@ -441,6 +447,9 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
             </Tooltip>
           )}
           {props.triggerSuffix}
+          {props.isComposerOwned && activeEntry?.driverKind === "pi" ? (
+            <ChevronDownIcon aria-hidden="true" className="size-3 opacity-50" />
+          ) : null}
           {selectedModel?.isUnavailable && !selectedEntries && props.triggerLabel === undefined ? (
             <Badge variant="outline" size="sm">
               <T context="badge on a model that cannot be selected">Unavailable</T>
@@ -466,6 +475,9 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
           ? { side: "top" as const, collisionAvoidance: { side: "shift", align: "shift" } as const }
           : {})}
         className="before:hidden"
+        data-telos-picker={
+          props.isComposerOwned && activeEntry?.driverKind === "pi" ? "model-popup" : undefined
+        }
         padding="none"
         touchBackdrop
       >

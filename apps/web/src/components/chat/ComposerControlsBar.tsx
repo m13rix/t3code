@@ -31,6 +31,9 @@ import {
 } from "./ComposerModelEffort";
 import type { useComposerProviderModel } from "./useComposerProviderModel";
 import { resolveComposerControlsOwnership } from "./composerControlsOwnership";
+import { piNamedAgentName } from "@t3tools/contracts";
+import { ComposerAgentPicker } from "./ComposerAgentPicker";
+import { ComposerReasoningPicker } from "./ComposerReasoningPicker";
 
 /**
  * The composer footer controls: the model picker (which also holds effort, speed and
@@ -80,6 +83,7 @@ export function ComposerControlsBar(props: {
   lockedProvider: ChatComposerProps["lockedProvider"];
   lockedContinuationGroupKey: string | null;
   providerInstanceEntries: ReadonlyArray<ProviderInstanceEntry>;
+  agentSelectionLocked: boolean;
   keybindings: ChatComposerProps["keybindings"];
   modelOptionsByInstance: ReadonlyMap<ProviderInstanceId, ReadonlyArray<AppModelOption>>;
   terminalOpen: boolean;
@@ -210,7 +214,11 @@ export function ComposerControlsBar(props: {
       }
       lockedProvider={lockedProvider}
       lockedContinuationGroupKey={lockedContinuationGroupKey}
-      instanceEntries={providerInstanceEntries}
+      instanceEntries={
+        piNamedAgentName(selectedInstanceId)
+          ? providerInstanceEntries.filter((entry) => entry.instanceId === selectedInstanceId)
+          : providerInstanceEntries.filter((entry) => !piNamedAgentName(entry.instanceId))
+      }
       keybindings={keybindings}
       modelOptionsByInstance={modelOptionsByInstance}
       size={controlSize}
@@ -219,7 +227,7 @@ export function ComposerControlsBar(props: {
         MODEL_TRIGGER_STATES,
         composerControlsCollapsed ? "min-w-13 shrink text-xs!" : "min-w-13",
       )}
-      triggerSuffix={effort.suffix}
+      triggerSuffix={selectedProvider === "pi" ? undefined : effort.suffix}
       triggerDetail={effort.detail}
       triggerShortcuts={
         pickerOwnsModeShortcut ? "composer.effort composer.mode" : "composer.effort"
@@ -249,23 +257,54 @@ export function ComposerControlsBar(props: {
     />
   );
   return showProviderUnavailable ? (
-    <ComposerControl
-      type="button"
-      disabled={!providerSetupInstanceId}
-      onClick={() => {
-        if (providerSetupInstanceId) {
-          onOpenProviderSetup(providerSetupInstanceId);
-        }
-      }}
-      data-chat-provider-unavailable="true"
-      className="shrink-0"
-    >
-      <CircleAlertIcon className="size-4" />
-      {providerSetupInstanceId ? gt("Open provider settings") : gt("No provider available")}
-    </ComposerControl>
+    <>
+      {piNamedAgentName(selectedInstanceId) ? (
+        <ComposerAgentPicker
+          selectedInstanceId={selectedInstanceId}
+          entries={providerInstanceEntries}
+          size={controlSize}
+          disabled
+          onSelect={() => {}}
+        />
+      ) : null}
+      <ComposerControl
+        type="button"
+        disabled={!providerSetupInstanceId}
+        onClick={() => {
+          if (providerSetupInstanceId) {
+            onOpenProviderSetup(providerSetupInstanceId);
+          }
+        }}
+        data-chat-provider-unavailable="true"
+        className="shrink-0"
+      >
+        <CircleAlertIcon className="size-4" />
+        {providerSetupInstanceId ? gt("Open provider settings") : gt("No provider available")}
+      </ComposerControl>
+    </>
   ) : (
     <>
+      {selectedProvider === "pi" ? (
+        <ComposerAgentPicker
+          selectedInstanceId={selectedInstanceId}
+          entries={providerInstanceEntries}
+          size={controlSize}
+          disabled={props.agentSelectionLocked || providerCatalogPending || isSendBusy}
+          onSelect={(instanceId) => {
+            const models = modelOptionsByInstance.get(instanceId) ?? [];
+            const model =
+              models.find((option) => option.slug === selectedModel)?.slug ??
+              models[0]?.slug ??
+              selectedModel;
+            onMultipleModelSelectionsChange(null);
+            onProviderModelSelect(instanceId, model, { focusComposer: false });
+          }}
+        />
+      ) : null}
       {composerModelPicker}
+      {selectedProvider === "pi" && traitsInput ? (
+        <ComposerReasoningPicker traits={traitsInput} size={controlSize} />
+      ) : null}
 
       <>
         {restingBlockDefs.map((def, index) => {

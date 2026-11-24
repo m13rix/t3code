@@ -8,6 +8,7 @@ import {
   type ModelSelection,
   type ProjectId,
   ProviderDriverKind,
+  piNamedAgentName,
   type ScopedThreadRef,
   type ServerProvider,
 } from "@t3tools/contracts";
@@ -39,6 +40,8 @@ export function useComposerProviderModel(
     readonly promptInjectionState: ReturnType<typeof getComposerPromptInjectionState>;
     readonly threadStarted: boolean;
     readonly isDraftThread: boolean;
+    readonly workspaceCwd: string | null;
+    readonly projectWorkspaceCwd: string | null;
   },
 ) {
   const {
@@ -54,14 +57,27 @@ export function useComposerProviderModel(
     lockedInstanceId,
     threadStarted,
     isDraftThread,
+    workspaceCwd,
+    projectWorkspaceCwd,
   } = input;
   const draftModelState = useComposerDraftModelState(threadRef);
-  const entries = providerInstanceEntriesFor(providerStatuses, settings, activeProjectId);
+  const entries = providerInstanceEntriesFor(providerStatuses, settings, activeProjectId).filter(
+    (entry) => {
+      const workspaces = entry.snapshot.piNamedAgentWorkspaces;
+      return (
+        !workspaces ||
+        workspaces.some(
+          (cwd) => cwd === workspaceCwd || (isDraftThread && cwd === projectWorkspaceCwd),
+        ) ||
+        (threadStarted && entry.instanceId === lockedInstanceId)
+      );
+    },
+  );
   const providerInstanceEntries: ReadonlyArray<ProviderInstanceEntry> = providerEntriesForThread(
     entries,
     isDraftThread,
   );
-  const selection = resolveComposerProviderSelection({
+  const resolvedSelection = resolveComposerProviderSelection({
     entries: providerInstanceEntries,
     candidateInstanceIds: [
       draftModelSelectionApplies(draftModelState, threadStarted)
@@ -72,8 +88,28 @@ export function useComposerProviderModel(
     lockedProvider,
     lockedInstanceId,
   });
+  const lockedNamedId =
+    threadStarted && lockedInstanceId && piNamedAgentName(lockedInstanceId)
+      ? lockedInstanceId
+      : undefined;
+  const lockedEntry = lockedNamedId
+    ? providerInstanceEntries.find(
+        (entry) => entry.instanceId === lockedNamedId && entry.enabled && entry.isAvailable,
+      )
+    : undefined;
+  const selection = lockedNamedId
+    ? {
+        ...resolvedSelection,
+        selectedProviderEntry: lockedEntry,
+        requestedInstanceId: lockedNamedId,
+        requestedDriverKind: ProviderDriverKind.make("pi"),
+        unavailableProviderInstanceId: lockedEntry ? undefined : lockedNamedId,
+      }
+    : resolvedSelection;
   const selectedInstanceId =
-    selection.selectedProviderEntry?.instanceId ?? NO_PROVIDER_MODEL_SELECTION.instanceId;
+    lockedNamedId ??
+    selection.selectedProviderEntry?.instanceId ??
+    NO_PROVIDER_MODEL_SELECTION.instanceId;
   const selectedProvider: ProviderDriverKind =
     selection.selectedProviderEntry?.driverKind ?? selection.requestedDriverKind;
   const modelState = deriveEffectiveComposerModelState({

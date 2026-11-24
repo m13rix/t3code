@@ -45,6 +45,7 @@ export const ModelListRow = memo(function ModelListRow(props: {
   const row = (
     <ComboboxItem
       hideIndicator
+      data-composer-model-row
       selectedFill={false}
       index={props.index}
       value={modelPickerModelKey(props.instanceId, props.slug)}
@@ -56,19 +57,21 @@ export const ModelListRow = memo(function ModelListRow(props: {
       )}
     >
       {/* One row shape in every tab: the logo names the provider, so Favorites needs no second line. */}
-      <ProviderInstanceIcon
-        driverKind={props.driverKind}
-        displayName={props.providerDisplayName}
-        accentColor={props.providerAccentColor}
-        acpRegistryAgentId={props.acpRegistryAgentId}
-        acpRegistryIconUrl={props.acpRegistryIconUrl}
-        showBadge={props.showInstanceBadge}
-        className="size-4"
-        iconClassName="size-4"
-        indicatorBackground="var(--popover)"
-        badgeClassName="right-[-0.125rem] bottom-[-0.125rem] h-3 min-w-3 px-0.5 text-5xs"
-      />
-      <div className="flex min-w-0 flex-1 items-center gap-2 text-left">
+      <span data-composer-model-leading-icon className="contents">
+        <ProviderInstanceIcon
+          driverKind={props.driverKind}
+          displayName={props.providerDisplayName}
+          accentColor={props.providerAccentColor}
+          acpRegistryAgentId={props.acpRegistryAgentId}
+          acpRegistryIconUrl={props.acpRegistryIconUrl}
+          showBadge={props.showInstanceBadge}
+          className="size-4"
+          iconClassName="size-4"
+          indicatorBackground="var(--popover)"
+          badgeClassName="right-[-0.125rem] bottom-[-0.125rem] h-3 min-w-3 px-0.5 text-5xs"
+        />
+      </span>
+      <div data-composer-model-copy className="flex min-w-0 flex-1 items-center gap-2 text-left">
         <div
           className="min-w-0 truncate text-sm font-normal leading-snug"
           // Names the row in full on hover only when it is cut off.
@@ -81,9 +84,21 @@ export const ModelListRow = memo(function ModelListRow(props: {
           {/* The logo is decorative, so name the provider for screen readers. */}
           <span className="sr-only">, {props.providerDisplayName}</span>
         </div>
+        <span data-composer-model-series className="hidden" aria-hidden="true">
+          <ProviderInstanceIcon
+            driverKind={props.driverKind}
+            displayName={props.providerDisplayName}
+            iconClassName="size-3"
+            className="size-3"
+          />
+          {props.subProvider ?? props.providerDisplayName}
+        </span>
         {props.isSelected ? <CheckIcon className="size-3.5 shrink-0" aria-hidden="true" /> : null}
         {props.subProvider ? (
-          <span className="min-w-0 shrink truncate text-xs text-muted-foreground/70">
+          <span
+            data-composer-model-inline-provider
+            className="min-w-0 shrink truncate text-xs text-muted-foreground/70"
+          >
             {props.subProvider}
           </span>
         ) : null}

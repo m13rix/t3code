@@ -19,8 +19,24 @@ export type ProviderDriverKind = typeof ProviderDriverKind.Type;
 
 export const isProviderDriverKind = Schema.is(ProviderDriverKind);
 
-export const ProviderInstanceId = slugSchema.pipe(Schema.brand("ProviderInstanceId"));
+const PI_NAMED_AGENT_PREFIX = "pi-agent-";
+const PI_AGENT_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,254}$/;
+
+export const ProviderInstanceId = TrimmedNonEmptyString.check(
+  Schema.isPattern(/^(?:[a-zA-Z][a-zA-Z0-9_-]{0,63}|pi-agent-[a-zA-Z0-9][a-zA-Z0-9_-]{0,254})$/),
+).pipe(Schema.brand("ProviderInstanceId"));
 export type ProviderInstanceId = typeof ProviderInstanceId.Type;
+
+export const isPiNamedAgentName = (name: string): boolean => PI_AGENT_NAME_PATTERN.test(name);
+
+export const piNamedAgentInstanceId = (name: string): ProviderInstanceId =>
+  ProviderInstanceId.make(PI_NAMED_AGENT_PREFIX + name);
+
+export function piNamedAgentName(instanceId: string): string | undefined {
+  if (!instanceId.startsWith(PI_NAMED_AGENT_PREFIX)) return undefined;
+  const name = instanceId.slice(PI_NAMED_AGENT_PREFIX.length);
+  return isPiNamedAgentName(name) ? name : undefined;
+}
 
 export const ProviderInstanceEnvironmentVariableName = TrimmedNonEmptyString.check(
   Schema.isMaxLength(ENVIRONMENT_VARIABLE_NAME_MAX_CHARS),

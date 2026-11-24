@@ -1,6 +1,7 @@
 import {
   ModelSelection,
   OrchestrationV2ThreadProjection,
+  piNamedAgentName,
   ProviderSessionId,
   ThreadId,
 } from "@t3tools/contracts";
@@ -98,6 +99,19 @@ export const layer: Layer.Layer<
               thread.providerInstanceId === current.instanceId &&
               thread.nativeThreadRef !== null,
           );
+          if (
+            instanceChanged &&
+            (piNamedAgentName(current.instanceId) !== undefined ||
+              piNamedAgentName(targetModelSelection.instanceId) !== undefined) &&
+            (currentSessions.length > 0 || currentProviderThread !== undefined)
+          ) {
+            return yield* new ProviderSwitchPlanError({
+              threadId: projection.thread.id,
+              targetProviderInstanceId: targetModelSelection.instanceId,
+              cause:
+                "The Telos Pi agent is fixed once a session starts. Start a new thread to choose another agent.",
+            });
+          }
           const selectionTransition =
             current.instanceId === targetModelSelection.instanceId &&
             !modelSelectionsEqual(current, targetModelSelection) &&

@@ -52,6 +52,7 @@ import {
   ProviderInstanceConfig,
   ProviderInstanceId,
   ProviderDriverKind,
+  piNamedAgentName,
 } from "./providerInstance.ts";
 import { PullRequestMergeMethod } from "./pullRequest.ts";
 import {
@@ -1656,7 +1657,7 @@ const DEFAULT_ENABLED_DEFAULT_INSTANCES: ReadonlySet<ProviderInstanceId> = new S
 );
 
 export const isUnconfiguredDefaultInstanceEnabled = (instanceId: ProviderInstanceId): boolean =>
-  DEFAULT_ENABLED_DEFAULT_INSTANCES.has(instanceId);
+  DEFAULT_ENABLED_DEFAULT_INSTANCES.has(instanceId) || piNamedAgentName(instanceId) !== undefined;
 
 const defaultEnabledForDriver = (driver: ProviderDriverKind): boolean =>
   !DEFAULT_DISABLED_PROVIDER_DRIVERS.has(driver);
@@ -1684,9 +1685,15 @@ export const resolveProjectProviderInstanceEnabled = (
   const instanceConfig = Object.hasOwn(settings.providerInstances, instanceId)
     ? settings.providerInstances[instanceId]
     : undefined;
-  return instanceConfig !== undefined
-    ? resolveProviderInstanceEnabled(instanceConfig)
-    : isUnconfiguredDefaultInstanceEnabled(instanceId);
+  if (instanceConfig !== undefined) return resolveProviderInstanceEnabled(instanceConfig);
+  if (piNamedAgentName(instanceId) !== undefined) {
+    return resolveProjectProviderInstanceEnabled(
+      settings,
+      projectId,
+      ProviderInstanceId.make("pi"),
+    );
+  }
+  return isUnconfiguredDefaultInstanceEnabled(instanceId);
 };
 
 /** The text generator a selection names, if any; it takes precedence over a provider instance. */

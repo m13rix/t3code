@@ -38,6 +38,7 @@ import * as ProviderRuntimeRecovery from "./orchestration-v2/ProviderRuntimeReco
 import * as ProviderSessionManager from "./orchestration-v2/ProviderSessionManager.ts";
 import * as ThreadLaunch from "./orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadManagement from "./orchestration-v2/ThreadManagementService.ts";
+import * as AgentSessionImporter from "./project/AgentSessionImporter.ts";
 import * as ProjectService from "./project/ProjectService.ts";
 import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
 import * as ProjectStore from "./orchestration-v2/ProjectStore.ts";
@@ -552,7 +553,19 @@ const make = Effect.fn("serverRuntimeStartup.make")(function* (options?: Startup
           ),
         ),
       ),
-      recover: runStartupPhase("orchestration-v2.recovery", providerRuntimeRecovery.recover),
+      recover: runStartupPhase(
+        "orchestration-v2.recovery",
+        Effect.gen(function* () {
+          const importer = yield* AgentSessionImporter.AgentSessionImporter;
+          yield* importer.restoreNamedPiImports.pipe(
+            Effect.timeoutOption("2 seconds"),
+            Effect.catch((cause) =>
+              Effect.logWarning("Unable to recover older Pi import identities", { cause }),
+            ),
+          );
+          return yield* providerRuntimeRecovery.recover;
+        }),
+      ),
       recoverDelegatedTasks: runStartupPhase(
         "orchestration-v2.delegated-tasks.recover",
         orchestrator.recoverDelegatedTasks,
